@@ -14,11 +14,42 @@ const (
 	reportInterval = 10 * time.Second
 )
 
+var MetricsMap = map[string]float64{
+	"Alloc":         0,
+	"BuckHashSys":   0,
+	"Frees":         0,
+	"GCCPUFraction": 0,
+	"GCSys":         0,
+	"HeapAlloc":     0,
+	"HeapIdle":      0,
+	"HeapInuse":     0,
+	"HeapObjects":   0,
+	"HeapReleased":  0,
+	"HeapSys":       0,
+	"LastGC":        0,
+	"Lookups":       0,
+	"MCacheInuse":   0,
+	"MCacheSys":     0,
+	"MSpanInuse":    0,
+	"MSpanSys":      0,
+	"Mallocs":       0,
+	"NextGC":        0,
+	"NumForcedGC":   0,
+	"NumGC":         0,
+	"OtherSys":      0,
+	"PauseTotalNs":  0,
+	"StackInuse":    0,
+	"StackSys":      0,
+	"Sys":           0,
+	"TotalAlloc":    0,
+	"PollCount":     0,
+	"RandomValue":   0,
+}
+
 func Monitoring() {
 	// Создаем экземпляр структуры Metrics
-	metrics := make(map[string]float64)
+
 	var mu sync.Mutex
-	var PollCount float64
 	// Горутина для сбора метрик
 	go func() {
 		for {
@@ -28,35 +59,35 @@ func Monitoring() {
 
 			// Обновляем метрики из пакета runtime
 			mu.Lock()
-			metrics["Alloc"] = float64(m.Alloc)
-			metrics["BuckHashSys"] = float64(m.BuckHashSys)
-			metrics["Frees"] = float64(m.Frees)
-			metrics["GCCPUFraction"] = m.GCCPUFraction
-			metrics["GCSys"] = float64(m.GCSys)
-			metrics["HeapAlloc"] = float64(m.HeapAlloc)
-			metrics["HeapIdle"] = float64(m.HeapIdle)
-			metrics["HeapInuse"] = float64(m.HeapInuse)
-			metrics["HeapObjects"] = float64(m.HeapObjects)
-			metrics["HeapReleased"] = float64(m.HeapReleased)
-			metrics["HeapSys"] = float64(m.HeapSys)
-			metrics["LastGC"] = float64(m.LastGC)
-			metrics["Lookups"] = float64(m.Lookups)
-			metrics["MCacheInuse"] = float64(m.MCacheInuse)
-			metrics["MCacheSys"] = float64(m.MCacheSys)
-			metrics["MSpanInuse"] = float64(m.MSpanInuse)
-			metrics["MSpanSys"] = float64(m.MSpanSys)
-			metrics["Mallocs"] = float64(m.Mallocs)
-			metrics["NextGC"] = float64(m.NextGC)
-			metrics["NumForcedGC"] = float64(m.NumForcedGC)
-			metrics["NumGC"] = float64(m.NumGC)
-			metrics["OtherSys"] = float64(m.OtherSys)
-			metrics["PauseTotalNs"] = float64(m.PauseTotalNs)
-			metrics["StackInuse"] = float64(m.StackInuse)
-			metrics["StackSys"] = float64(m.StackSys)
-			metrics["Sys"] = float64(m.Sys)
-			metrics["TotalAlloc"] = float64(m.TotalAlloc)
-			metrics["PollCount"] = PollCount + 1
-			metrics["RandomValue"] = rand.Float64()
+			MetricsMap["Alloc"] = float64(m.Alloc)
+			MetricsMap["BuckHashSys"] = float64(m.BuckHashSys)
+			MetricsMap["Frees"] = float64(m.Frees)
+			MetricsMap["GCCPUFraction"] = m.GCCPUFraction
+			MetricsMap["GCSys"] = float64(m.GCSys)
+			MetricsMap["HeapAlloc"] = float64(m.HeapAlloc)
+			MetricsMap["HeapIdle"] = float64(m.HeapIdle)
+			MetricsMap["HeapInuse"] = float64(m.HeapInuse)
+			MetricsMap["HeapObjects"] = float64(m.HeapObjects)
+			MetricsMap["HeapReleased"] = float64(m.HeapReleased)
+			MetricsMap["HeapSys"] = float64(m.HeapSys)
+			MetricsMap["LastGC"] = float64(m.LastGC)
+			MetricsMap["Lookups"] = float64(m.Lookups)
+			MetricsMap["MCacheInuse"] = float64(m.MCacheInuse)
+			MetricsMap["MCacheSys"] = float64(m.MCacheSys)
+			MetricsMap["MSpanInuse"] = float64(m.MSpanInuse)
+			MetricsMap["MSpanSys"] = float64(m.MSpanSys)
+			MetricsMap["Mallocs"] = float64(m.Mallocs)
+			MetricsMap["NextGC"] = float64(m.NextGC)
+			MetricsMap["NumForcedGC"] = float64(m.NumForcedGC)
+			MetricsMap["NumGC"] = float64(m.NumGC)
+			MetricsMap["OtherSys"] = float64(m.OtherSys)
+			MetricsMap["PauseTotalNs"] = float64(m.PauseTotalNs)
+			MetricsMap["StackInuse"] = float64(m.StackInuse)
+			MetricsMap["StackSys"] = float64(m.StackSys)
+			MetricsMap["Sys"] = float64(m.Sys)
+			MetricsMap["TotalAlloc"] = float64(m.TotalAlloc)
+			MetricsMap["PollCount"] = MetricsMap["PollCount"] + 1
+			MetricsMap["RandomValue"] = rand.Float64()
 			mu.Unlock()
 
 			time.Sleep(pollInterval)
@@ -67,7 +98,7 @@ func Monitoring() {
 	go func() {
 		for {
 
-			for metricName, metricValue := range metrics {
+			for metricName, metricValue := range MetricsMap {
 				if metricName != "PollCount" {
 					go sendMetric("gauge", metricName, metricValue)
 				} else {
@@ -108,6 +139,4 @@ func sendMetric(metricType, metricName string, metricValue any) {
 		fmt.Println("Ошибка при отправке метрики на сервер. Код ответа:", resp.StatusCode)
 		return
 	}
-
-	fmt.Printf("Метрика успешно отправлена на сервер: %s/%s/%f\n", metricType, metricName, metricValue)
 }
