@@ -1,13 +1,35 @@
-package server
+package main
 
 import (
 	"fmt"
 	"github.com/SerjZimmer/monitoring/cmd/agent"
+	"github.com/gorilla/mux"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 )
+
+func main() {
+	go func() {
+		// Создаем новый маршрутизатор Gorilla Mux
+		r := mux.NewRouter()
+
+		// Определяем маршрут для POST-запроса
+		r.HandleFunc("/update/{metricType}/{metricName}/{metricValue}", UpdateHandler).Methods("POST")
+		r.HandleFunc("/value/{metricType}/{metricName}", ValueHandler).Methods("GET")
+		r.HandleFunc("/", ValueListHandler).Methods("GET")
+
+		// Запускаем HTTP-сервер с использованием маршрутизатора Gorilla Mux
+		http.Handle("/", r)
+		fmt.Println("Сервер запущен на порту :8080")
+		http.ListenAndServe(":8080", nil)
+	}()
+	go agent.Monitoring()
+
+	select {}
+}
 
 func UpdateHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -31,13 +53,22 @@ func UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, ok := agent.MetricsMap[metricName]; !ok {
-		http.Error(w, "Неверное имя метрики", http.StatusBadRequest)
+	//if _, ok := agent.MetricsMap[metricName]; !ok {
+	//	http.Error(w, "Неверное имя метрики", http.StatusBadRequest)
+	//	return
+	//}
+	if !isNumeric(metricValue) {
+		http.Error(w, "Значение метрики должно быть числом", http.StatusBadRequest)
 		return
 	}
 
 	// Возвращаем успешный ответ
 	fmt.Fprintf(w, "Метрика успешно принята: %s/%s/%s\n", metricType, metricName, metricValue)
+}
+
+func isNumeric(s string) bool {
+	_, err := strconv.ParseFloat(s, 64)
+	return err == nil
 }
 
 func ValueHandler(w http.ResponseWriter, r *http.Request) {
