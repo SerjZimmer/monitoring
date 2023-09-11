@@ -9,11 +9,6 @@ import (
 	"time"
 )
 
-const (
-	pollInterval   = 2 * time.Second
-	reportInterval = 10 * time.Second
-)
-
 var MetricsMap = map[string]float64{
 	"Alloc":         0,
 	"BuckHashSys":   0,
@@ -46,9 +41,8 @@ var MetricsMap = map[string]float64{
 	"RandomValue":   0,
 }
 
-func Monitoring() {
+func Monitoring(address string, pollInterval, reportInterval time.Duration) {
 	// Создаем экземпляр структуры Metrics
-
 	var mu sync.Mutex
 	// Горутина для сбора метрик
 	go func() {
@@ -100,9 +94,9 @@ func Monitoring() {
 
 			for metricName, metricValue := range MetricsMap {
 				if metricName != "PollCount" {
-					go sendMetric("gauge", metricName, metricValue)
+					go sendMetric("gauge", metricName, metricValue, address)
 				} else {
-					go sendMetric("counter", metricName, int64(metricValue))
+					go sendMetric("counter", metricName, int64(metricValue), address)
 				}
 			}
 
@@ -115,8 +109,8 @@ func Monitoring() {
 }
 
 // Отправка метрики на сервер
-func sendMetric(metricType, metricName string, metricValue any) {
-	serverURL := fmt.Sprintf("http://localhost:8080/update/%s/%s/%v", metricType, metricName, metricValue)
+func sendMetric(metricType, metricName string, metricValue any, address string) {
+	serverURL := fmt.Sprintf("http://%v/update/%s/%s/%v", address, metricType, metricName, metricValue)
 
 	// Отправляем POST-запрос на сервер
 	req, err := http.NewRequest("POST", serverURL, nil)

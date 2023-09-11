@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/SerjZimmer/monitoring/cmd/agent"
 	"github.com/gorilla/mux"
@@ -9,7 +10,21 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
+
+var (
+	address        string
+	pollInterval   time.Duration
+	reportInterval time.Duration
+)
+
+func init() {
+	flag.StringVar(&address, "a", "localhost:8080", "Адрес эндпоинта HTTP-сервера")
+	flag.DurationVar(&reportInterval, "r", 10*time.Second, "Частота отправки метрик на сервер")
+	flag.DurationVar(&pollInterval, "p", 2*time.Second, "Частота опроса метрик из пакета runtime")
+	flag.Parse()
+}
 
 func main() {
 	go func() {
@@ -23,10 +38,11 @@ func main() {
 
 		// Запускаем HTTP-сервер с использованием маршрутизатора Gorilla Mux
 		http.Handle("/", r)
-		fmt.Println("Сервер запущен на порту :8080")
-		http.ListenAndServe(":8080", nil)
+		fmt.Printf("Сервер запущен на %v\n", address)
+		http.ListenAndServe(address, nil)
 	}()
-	go agent.Monitoring()
+	time.Sleep(time.Second)
+	go agent.Monitoring(address, pollInterval, reportInterval)
 
 	select {}
 }
@@ -53,10 +69,6 @@ func UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//if _, ok := agent.MetricsMap[metricName]; !ok {
-	//	http.Error(w, "Неверное имя метрики", http.StatusBadRequest)
-	//	return
-	//}
 	if !isNumeric(metricValue) {
 		http.Error(w, "Значение метрики должно быть числом", http.StatusBadRequest)
 		return
