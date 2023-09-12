@@ -1,49 +1,47 @@
-package agent
+package main
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
 	"net/http"
+	"os"
 	"runtime"
 	"sync"
 	"time"
 )
 
-var MetricsMap = map[string]float64{
-	"Alloc":         0,
-	"BuckHashSys":   0,
-	"Frees":         0,
-	"GCCPUFraction": 0,
-	"GCSys":         0,
-	"HeapAlloc":     0,
-	"HeapIdle":      0,
-	"HeapInuse":     0,
-	"HeapObjects":   0,
-	"HeapReleased":  0,
-	"HeapSys":       0,
-	"LastGC":        0,
-	"Lookups":       0,
-	"MCacheInuse":   0,
-	"MCacheSys":     0,
-	"MSpanInuse":    0,
-	"MSpanSys":      0,
-	"Mallocs":       0,
-	"NextGC":        0,
-	"NumForcedGC":   0,
-	"NumGC":         0,
-	"OtherSys":      0,
-	"PauseTotalNs":  0,
-	"StackInuse":    0,
-	"StackSys":      0,
-	"Sys":           0,
-	"TotalAlloc":    0,
-	"PollCount":     0,
-	"RandomValue":   0,
+var (
+	address        string
+	pollInterval   int
+	reportInterval int
+	metricsMap     = map[string]float64{}
+)
+
+func flagInit() {
+	flag.StringVar(&address, "a", "localhost:8080", "Адрес эндпоинта HTTP-сервера")
+	flag.IntVar(&reportInterval, "r", 10, "Частота отправки метрик на сервер")
+	flag.IntVar(&pollInterval, "p", 2, "Частота опроса метрик из пакета runtime")
+	flag.VisitAll(func(f *flag.Flag) {
+		if f.Name == "a" || f.Name == "r" || f.Name == "p" {
+			return
+		}
+		fmt.Printf("Неизвестный флаг: -%s\n", f.Name)
+		flag.PrintDefaults()
+		os.Exit(1)
+	})
+	flag.Parse()
+}
+func main() {
+	flagInit()
+	for {
+		monitoring(address, pollInterval, reportInterval)
+	}
 }
 
-func Monitoring(address string, pollInterval, reportInterval time.Duration) {
-	// Создаем экземпляр структуры Metrics
-	var mu sync.Mutex
+var mu sync.Mutex
+
+func monitoring(address string, pollInterval, reportInterval int) {
 	// Горутина для сбора метрик
 	go func() {
 		for {
@@ -53,38 +51,38 @@ func Monitoring(address string, pollInterval, reportInterval time.Duration) {
 
 			// Обновляем метрики из пакета runtime
 			mu.Lock()
-			MetricsMap["Alloc"] = float64(m.Alloc)
-			MetricsMap["BuckHashSys"] = float64(m.BuckHashSys)
-			MetricsMap["Frees"] = float64(m.Frees)
-			MetricsMap["GCCPUFraction"] = m.GCCPUFraction
-			MetricsMap["GCSys"] = float64(m.GCSys)
-			MetricsMap["HeapAlloc"] = float64(m.HeapAlloc)
-			MetricsMap["HeapIdle"] = float64(m.HeapIdle)
-			MetricsMap["HeapInuse"] = float64(m.HeapInuse)
-			MetricsMap["HeapObjects"] = float64(m.HeapObjects)
-			MetricsMap["HeapReleased"] = float64(m.HeapReleased)
-			MetricsMap["HeapSys"] = float64(m.HeapSys)
-			MetricsMap["LastGC"] = float64(m.LastGC)
-			MetricsMap["Lookups"] = float64(m.Lookups)
-			MetricsMap["MCacheInuse"] = float64(m.MCacheInuse)
-			MetricsMap["MCacheSys"] = float64(m.MCacheSys)
-			MetricsMap["MSpanInuse"] = float64(m.MSpanInuse)
-			MetricsMap["MSpanSys"] = float64(m.MSpanSys)
-			MetricsMap["Mallocs"] = float64(m.Mallocs)
-			MetricsMap["NextGC"] = float64(m.NextGC)
-			MetricsMap["NumForcedGC"] = float64(m.NumForcedGC)
-			MetricsMap["NumGC"] = float64(m.NumGC)
-			MetricsMap["OtherSys"] = float64(m.OtherSys)
-			MetricsMap["PauseTotalNs"] = float64(m.PauseTotalNs)
-			MetricsMap["StackInuse"] = float64(m.StackInuse)
-			MetricsMap["StackSys"] = float64(m.StackSys)
-			MetricsMap["Sys"] = float64(m.Sys)
-			MetricsMap["TotalAlloc"] = float64(m.TotalAlloc)
-			MetricsMap["PollCount"] = MetricsMap["PollCount"] + 1
-			MetricsMap["RandomValue"] = rand.Float64()
+			metricsMap["Alloc"] = float64(m.Alloc)
+			metricsMap["BuckHashSys"] = float64(m.BuckHashSys)
+			metricsMap["Frees"] = float64(m.Frees)
+			metricsMap["GCCPUFraction"] = m.GCCPUFraction
+			metricsMap["GCSys"] = float64(m.GCSys)
+			metricsMap["HeapAlloc"] = float64(m.HeapAlloc)
+			metricsMap["HeapIdle"] = float64(m.HeapIdle)
+			metricsMap["HeapInuse"] = float64(m.HeapInuse)
+			metricsMap["HeapObjects"] = float64(m.HeapObjects)
+			metricsMap["HeapReleased"] = float64(m.HeapReleased)
+			metricsMap["HeapSys"] = float64(m.HeapSys)
+			metricsMap["LastGC"] = float64(m.LastGC)
+			metricsMap["Lookups"] = float64(m.Lookups)
+			metricsMap["MCacheInuse"] = float64(m.MCacheInuse)
+			metricsMap["MCacheSys"] = float64(m.MCacheSys)
+			metricsMap["MSpanInuse"] = float64(m.MSpanInuse)
+			metricsMap["MSpanSys"] = float64(m.MSpanSys)
+			metricsMap["Mallocs"] = float64(m.Mallocs)
+			metricsMap["NextGC"] = float64(m.NextGC)
+			metricsMap["NumForcedGC"] = float64(m.NumForcedGC)
+			metricsMap["NumGC"] = float64(m.NumGC)
+			metricsMap["OtherSys"] = float64(m.OtherSys)
+			metricsMap["PauseTotalNs"] = float64(m.PauseTotalNs)
+			metricsMap["StackInuse"] = float64(m.StackInuse)
+			metricsMap["StackSys"] = float64(m.StackSys)
+			metricsMap["Sys"] = float64(m.Sys)
+			metricsMap["TotalAlloc"] = float64(m.TotalAlloc)
+			metricsMap["PollCount"] = metricsMap["PollCount"] + 1
+			metricsMap["RandomValue"] = rand.Float64()
 			mu.Unlock()
 
-			time.Sleep(pollInterval)
+			time.Sleep(time.Duration(pollInterval) * time.Second)
 		}
 	}()
 
@@ -92,15 +90,17 @@ func Monitoring(address string, pollInterval, reportInterval time.Duration) {
 	go func() {
 		for {
 
-			for metricName, metricValue := range MetricsMap {
+			mu.Lock()
+			for metricName, metricValue := range metricsMap {
 				if metricName != "PollCount" {
 					go sendMetric("gauge", metricName, metricValue, address)
 				} else {
 					go sendMetric("counter", metricName, int64(metricValue), address)
 				}
 			}
+			mu.Unlock()
 
-			time.Sleep(reportInterval)
+			time.Sleep(time.Duration(reportInterval) * time.Second)
 		}
 	}()
 

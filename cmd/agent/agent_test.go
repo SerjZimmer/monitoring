@@ -1,4 +1,4 @@
-package agent
+package main
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -10,7 +10,7 @@ import (
 // Mock sendMetric function for testing
 var (
 	originalSendMetric = sendMetric
-	sendMetricT        = func(metricType, metricName string, metricValue any) {}
+	sendMetricT        = func(metricType, metricName string, metricValue any, address string) {}
 )
 
 func TestSendMetric(t *testing.T) {
@@ -29,7 +29,7 @@ func TestSendMetric(t *testing.T) {
 	metricValue := 123.45
 
 	// Call sendMetric
-	sendMetric(metricType, metricName, metricValue)
+	sendMetric(metricType, metricName, metricValue, "localhost:8080")
 }
 
 func TestSendMetricCounter(t *testing.T) {
@@ -48,7 +48,7 @@ func TestSendMetricCounter(t *testing.T) {
 	metricValue := 123.45
 
 	// Call sendMetric
-	sendMetric(metricType, metricName, metricValue)
+	sendMetric(metricType, metricName, metricValue, "localhost:8080")
 }
 
 func TestMonitoring(t *testing.T) {
@@ -59,12 +59,12 @@ func TestMonitoring(t *testing.T) {
 	defer server.Close()
 
 	// Replace the sendMetric function with a mock for testing
-	sendMetricT = func(metricType, metricName string, metricValue interface{}) {
+	sendMetricT = func(metricType, metricName string, metricValue any, address string) {
 		// Mock behavior for sendMetric function during testing
 		// You can add assertions or checks here as needed
 		assert.Equal(t, "gauge", metricType)
 		assert.Equal(t, "metricName", metricName)
 		// Check metricValue against expected values
 	}
-	go Monitoring()
+	go monitoring("localhost:8080", 10, 10)
 }

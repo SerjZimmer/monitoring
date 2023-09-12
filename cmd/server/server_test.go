@@ -7,42 +7,22 @@ import (
 	"testing"
 )
 
-func TestUpdateHandler(t *testing.T) {
-	// Создаем тестовый HTTP запрос
-	req, err := http.NewRequest("GET", "/update/metricType/metricName/metricValue", nil)
-	if err != nil {
-		t.Fatal(err)
+func TestParseNumeric(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected float64
+	}{
+		{"valid input", "3.14", 3.14},
+		{"invalid input", "invalid", 0},
 	}
 
-	// Создаем тестовый HTTP ResponseWriter
-	rr := httptest.NewRecorder()
-
-	// Вызываем ваш обработчик
-	UpdateHandler(rr, req)
-
-	// Проверяем статус код
-	assert.Equal(t, http.StatusOK, rr.Code)
-
-	// Проверяем содержимое ответа
-	expectedResponse := "Метрика успешно принята: metricType/metricName/metricValue\n"
-	assert.Equal(t, expectedResponse, rr.Body.String())
-}
-
-func TestHandler(t *testing.T) {
-	// Создаем тестовый HTTP запрос
-	req, err := http.NewRequest("GET", "/update/metricType/metricName/metricValue", nil)
-	if err != nil {
-		t.Fatal(err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, _ := parseNumeric(tc.input)
+			assert.Equal(t, tc.expected, actual)
+		})
 	}
-
-	// Создаем тестовый HTTP ResponseWriter
-	rr := httptest.NewRecorder()
-
-	// Вызываем ваш обработчик
-	http.HandlerFunc(UpdateHandler).ServeHTTP(rr, req)
-
-	// Проверяем статус код
-	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
 func TestUpdateHandlerBadRequest(t *testing.T) {
@@ -64,4 +44,33 @@ func TestUpdateHandlerBadRequest(t *testing.T) {
 	// Check the response body for the error message
 	expectedResponse := "Неверный формат URL\n"
 	assert.Equal(t, expectedResponse, rr.Body.String())
+}
+func TestUpdateHandler(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"valid gauge input", "/update/gauge/metric1/3.14", "Метрика успешно принята: gauge/metric1/3.14\n"},
+		{"valid counter input", "/update/counter/metric2/2.71", "Метрика успешно принята: counter/metric2/2.71\n"},
+		{"invalid URL format", "/update/gauge/metric3", "Неверный формат URL\n"},
+		{"invalid metric type", "/update/invalid/metric4/1.23", "Неверный тип метрики\n"},
+		{"invalid metric value", "/update/gauge/metric5/invalid", "Значение метрики должно быть числом\n"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequest("GET", tc.input, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			rr := httptest.NewRecorder()
+			handler := http.HandlerFunc(UpdateHandler)
+
+			handler.ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expected, rr.Body.String())
+		})
+	}
 }

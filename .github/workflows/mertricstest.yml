@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+
 jobs:
 
   branchtest:
@@ -17,7 +18,7 @@ jobs:
 
   metricstest:
     runs-on: ubuntu-latest
-    container: golang:latest
+    container: golang:1.20
     needs: branchtest
 
     services:

@@ -1,58 +1,113 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
-	"github.com/SerjZimmer/monitoring/cmd/agent"
 	"github.com/gorilla/mux"
 	"net/http"
+	"os"
+	"os/signal"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
 var (
 	address        string
-	pollInterval   time.Duration
-	reportInterval time.Duration
+	pollInterval   int
+	reportInterval int
+	metricsMap     = map[string]float64{}
 )
 
-func init() {
+func flagInit() {
 	flag.StringVar(&address, "a", "localhost:8080", "Адрес эндпоинта HTTP-сервера")
-	flag.DurationVar(&reportInterval, "r", 10*time.Second, "Частота отправки метрик на сервер")
-	flag.DurationVar(&pollInterval, "p", 2*time.Second, "Частота опроса метрик из пакета runtime")
+	flag.IntVar(&reportInterval, "r", 10, "Частота отправки метрик на сервер")
+	flag.IntVar(&pollInterval, "p", 2, "Частота опроса метрик из пакета runtime")
+	flag.VisitAll(func(f *flag.Flag) {
+		if f.Name == "a" || f.Name == "r" || f.Name == "p" {
+			return
+		}
+		fmt.Printf("Неизвестный флаг: -%s\n", f.Name)
+		flag.PrintDefaults()
+		os.Exit(1)
+	})
 	flag.Parse()
 }
 
 func main() {
+	flagInit()
+
 	go func() {
-		// Создаем новый маршрутизатор Gorilla Mux
+
 		r := mux.NewRouter()
 
-		// Определяем маршрут для POST-запроса
 		r.HandleFunc("/update/{metricType}/{metricName}/{metricValue}", UpdateHandler).Methods("POST")
 		r.HandleFunc("/value/{metricType}/{metricName}", ValueHandler).Methods("GET")
 		r.HandleFunc("/", ValueListHandler).Methods("GET")
 
-		// Запускаем HTTP-сервер с использованием маршрутизатора Gorilla Mux
 		http.Handle("/", r)
-		fmt.Printf("Сервер запущен на %v\n", address)
-		http.ListenAndServe(address, nil)
+		if err := run(); err != nil {
+			panic(err)
+		}
+
+	}()
+	go func() {
+		sigchan := make(chan os.Signal, 1)
+		signal.Notify(sigchan, os.Interrupt, syscall.SIGTERM)
+		<-sigchan
+
+		close(shutdownChan) // Отправляем сигнал завершения серверу
 	}()
 	time.Sleep(time.Second)
-	go agent.Monitoring(address, pollInterval, reportInterval)
 
-	select {}
+	<-shutdownChan
+	// Остановка сервера
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		fmt.Printf("Ошибка при завершении работы сервера: %v\n", err)
+	}
+
+	os.Exit(0)
 }
+
+var (
+	server       *http.Server
+	shutdownChan = make(chan struct{})
+)
+
+func run() error {
+	fmt.Printf("Сервер запущен на %v\n", address)
+
+	server = &http.Server{Addr: address}
+	go func() {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			panic(err)
+		}
+	}()
+
+	<-shutdownChan // Ждем сигнала завершения
+	fmt.Println("Завершение работы сервера...")
+
+	// Завершаем работу сервера
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		fmt.Printf("Ошибка при завершении работы сервера: %v\n", err)
+	}
+
+	return nil
+}
+
+var mu sync.Mutex
 
 func UpdateHandler(w http.ResponseWriter, r *http.Request) {
 
-	if r.Method != http.MethodPost {
-		http.Error(w, "Метод не разрешен", http.StatusMethodNotAllowed)
-		return
-	}
 	// Разбираем URL-параметры
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) != 5 {
@@ -69,24 +124,33 @@ func UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isNumeric(metricValue) {
+	value, err := parseNumeric(metricValue)
+	if err != nil {
 		http.Error(w, "Значение метрики должно быть числом", http.StatusBadRequest)
 		return
 	}
 
+	mu.Lock()
+	if metricType == "counter" {
+		metricsMap[metricName] += value
+	} else {
+		metricsMap[metricName] = value
+	}
+
+	mu.Unlock()
 	// Возвращаем успешный ответ
 	fmt.Fprintf(w, "Метрика успешно принята: %s/%s/%s\n", metricType, metricName, metricValue)
 }
 
-func isNumeric(s string) bool {
-	_, err := strconv.ParseFloat(s, 64)
-	return err == nil
+func parseNumeric(mValue string) (float64, error) {
+	floatVal, err := strconv.ParseFloat(mValue, 64)
+	if err != nil {
+		return 0, err
+	}
+	return floatVal, nil
 }
 
 func ValueHandler(w http.ResponseWriter, r *http.Request) {
-
-	var mu sync.Mutex
-	var result float64
 
 	if r.Method != http.MethodGet {
 		http.Error(w, "Метод не разрешен", http.StatusMethodNotAllowed)
@@ -107,16 +171,16 @@ func ValueHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, ok := agent.MetricsMap[metricName]; !ok {
+	mu.Lock()
+	value, exists := metricsMap[metricName]
+	mu.Unlock()
+	if exists {
+		fmt.Fprintf(w, "%v\n", value)
+	} else {
 		http.Error(w, "Неверное имя метрики", http.StatusNotFound)
 		return
 	}
-	mu.Lock()
-	result = agent.MetricsMap[metricName]
-	mu.Unlock()
 
-	// Возвращаем успешный ответ
-	fmt.Fprintf(w, "%s/%s/ = %v\n", metricType, metricName, result)
 }
 
 func ValueListHandler(w http.ResponseWriter, r *http.Request) {
@@ -125,7 +189,7 @@ func ValueListHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Извлекаем ключи из мапы MetricsMap
 	var keys []string
-	for key := range agent.MetricsMap {
+	for key := range metricsMap {
 		keys = append(keys, key)
 	}
 
@@ -137,7 +201,7 @@ func ValueListHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<h1>Все метрики</h1>")
 	fmt.Fprintf(w, "<ul>")
 	for _, key := range keys {
-		fmt.Fprintf(w, "<li>%s: %v</li>", key, agent.MetricsMap[key])
+		fmt.Fprintf(w, "<li>%s: %v</li>", key, metricsMap[key])
 	}
 	fmt.Fprintf(w, "</ul></body></html>")
 }
