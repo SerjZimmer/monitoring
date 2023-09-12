@@ -25,9 +25,9 @@ var (
 )
 
 func flagInit() {
-	flag.StringVar(&address, "a", "localhost:8080", "Адрес эндпоинта HTTP-сервера")
-	flag.IntVar(&reportInterval, "r", 10, "Частота отправки метрик на сервер")
-	flag.IntVar(&pollInterval, "p", 2, "Частота опроса метрик из пакета runtime")
+	flag.StringVar(&address, "a", getEnv("ADDRESS", "localhost:8080"), "Адрес эндпоинта HTTP-сервера")
+	flag.IntVar(&reportInterval, "r", getEnvAsInt("REPORT_INTERVAL", 10), "Частота отправки метрик на сервер")
+	flag.IntVar(&pollInterval, "p", getEnvAsInt("POLL_INTERVAL", 2), "Частота опроса метрик из пакета runtime")
 	flag.VisitAll(func(f *flag.Flag) {
 		if f.Name == "a" || f.Name == "r" || f.Name == "p" {
 			return
@@ -37,6 +37,25 @@ func flagInit() {
 		os.Exit(1)
 	})
 	flag.Parse()
+}
+
+func getEnv(key, defaultValue string) string {
+	value, exists := os.LookupEnv(key)
+	if exists {
+		return value
+	}
+	return defaultValue
+}
+
+func getEnvAsInt(key string, defaultValue int) int {
+	valueStr := getEnv(key, "")
+	if valueStr != "" {
+		value, err := strconv.Atoi(valueStr)
+		if err == nil {
+			return value
+		}
+	}
+	return defaultValue
 }
 
 func main() {
